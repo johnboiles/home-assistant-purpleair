@@ -1,6 +1,8 @@
 {
   "domain": "purpleair",
   "name": "PurpleAir",
+  "version": "1.0.0",
+  "iot_class": "cloud_polling",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/purpleair",
   "requirements": [],
