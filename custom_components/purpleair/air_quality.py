@@ -13,17 +13,21 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, config_entry, async_schedule_add_entities):
-    node_id = config_entry.data["id"]
-    title = config_entry.data["title"]
+    _LOGGER.debug('registring air quality sensor with data: %s', config_entry.data)
 
-    async_schedule_add_entities([PurpleAirQuality(hass, node_id, title)])
+    async_schedule_add_entities([PurpleAirQuality(hass, config_entry)])
 
 
 class PurpleAirQuality(AirQualityEntity):
-    def __init__(self, hass, node_id, title):
+    def __init__(self, hass, config_entry):
+        data = config_entry.data
+
         self._hass = hass
-        self._node_id = node_id
-        self._title = title
+        self._node_id = data['id']
+        self._title = data['title']
+        self._key = data['key'] if 'key' in data else None
+        self._hidden = data['hidden'] if 'hidden' in data else False
+
         self._api = hass.data[DOMAIN]
         self._stop_listening = None
 
@@ -75,7 +79,8 @@ class PurpleAirQuality(AirQualityEntity):
 
     async def async_added_to_hass(self):
         _LOGGER.debug('registering with node_id: %s', self._node_id)
-        self._api.register_node(self._node_id)
+
+        self._api.register_node(self._node_id, self._hidden, self._key)
         self._stop_listening = async_dispatcher_connect(
             self._hass,
             DISPATCHER_PURPLE_AIR,
@@ -86,6 +91,7 @@ class PurpleAirQuality(AirQualityEntity):
     async def async_will_remove_from_hass(self):
         _LOGGER.debug('unregistering node_id: %s', self._node_id)
         self._api.unregister_node(self._node_id)
+
         if self._stop_listening:
             self._stop_listening()
             self._stop_listening = None

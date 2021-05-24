@@ -5,7 +5,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval, async_track_point_in_utc_time
 from homeassistant.util import dt
 
-from .const import AQI_BREAKPOINTS, DISPATCHER_PURPLE_AIR, JSON_PROPERTIES, SCAN_INTERVAL, URL
+from .const import AQI_BREAKPOINTS, DISPATCHER_PURPLE_AIR, JSON_PROPERTIES, SCAN_INTERVAL, PUBLIC_URL, PRIVATE_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class PurpleAirApi:
     def __init__(self, hass, session):
         self._hass = hass
         self._session = session
-        self._nodes = []
+        self._nodes = {}
         self._data = {}
         self._scan_interval = timedelta(seconds=SCAN_INTERVAL)
         self._shutdown_interval = None
@@ -50,12 +50,12 @@ class PurpleAirApi:
         readings = self.get_property(node_id, 'readings')
         return readings[prop] if prop in readings else None
 
-    def register_node(self, node_id):
+    def register_node(self, node_id, hidden, key):
         if node_id in self._nodes:
             _LOGGER.debug('detected duplicate registration: %s', node_id)
             return
 
-        self._nodes.append(node_id)
+        self._nodes[node_id] = { 'hidden': hidden, 'key': key }
         _LOGGER.debug('registered new node: %s', node_id)
 
         if not self._shutdown_interval:
@@ -77,7 +77,7 @@ class PurpleAirApi:
             _LOGGER.debug('detected non-existent unregistration: %s', node_id)
             return
 
-        self._nodes.remove(node_id)
+        del self._nodes[node_id]
         _LOGGER.debug('unregistered node: %s', node_id)
 
         if not self._nodes and self._shutdown_interval:
@@ -86,17 +86,37 @@ class PurpleAirApi:
             self._shutdown_interval = None
 
     async def _update(self, now=None):
-        url = URL.format(node_list='|'.join(self._nodes))
-        _LOGGER.debug('calling update url: %s', url)
+        _LOGGER.debug('nodes: %s', self._nodes)
+        public_nodes = [node_id for node_id in self._nodes if not self._nodes[node_id]['hidden']]
+        private_nodes = [node_id for node_id in self._nodes if self._nodes[node_id]['hidden']]
 
-        results = {}
-        async with self._session.get(url) as resp:
-            if resp.status != 200:
-                _LOGGER.warning('bad API response for %s: %s', url, resp.status)
-                return
+        _LOGGER.debug('public nodes: %s, private nodes: %s', public_nodes, private_nodes)
 
-            json = await resp.json()
-            results = json['results']
+
+        results = []
+        if public_nodes:
+            url = PUBLIC_URL.format(node_list='|'.join(public_nodes))
+            _LOGGER.debug('calling update url for public nodes: %s', url)
+
+            async with self._session.get(url) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning('bad API response for %s: %s', url, resp.status)
+                    return
+
+                json = await resp.json()
+                results += json['results']
+
+        for node_id in private_nodes:
+            url = PRIVATE_URL.format(node_id=node_id,key=self._nodes[node_id]['key'])
+            _LOGGER.debug('getting private node via url: %s', url)
+
+            async with self._session.get(url) as resp:
+                if resp.status != 200:
+                    _LOGGER.warning('bad API response for %s: %s', url, resp.status)
+                    return
+
+                json = await resp.json()
+                results += json['results']
 
         nodes = {}
         for result in results:
