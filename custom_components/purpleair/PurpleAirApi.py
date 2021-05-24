@@ -85,38 +85,61 @@ class PurpleAirApi:
             self._shutdown_interval()
             self._shutdown_interval = None
 
+
+    async def _fetch_data(self, public_nodes, private_nodes):
+        urls = []
+
+        if private_nodes:
+            by_keys = {}
+            for node in private_nodes:
+                data = self._nodes[node]
+                key = data['key'] if 'key' in data else None
+
+                if key:
+                    if key not in by_keys:
+                        by_keys[key] = []
+
+                    by_keys[key].append(node)
+
+            used_public = False
+            for key, private_nodes_for_key in by_keys.items():
+                nodes = private_nodes_for_key
+                if not used_public:
+                    nodes += public_nodes
+                    used_public = True
+
+                urls.append(PRIVATE_URL.format(nodes='|'.join(nodes), key=key))
+
+        elif public_nodes:
+            urls.append(PUBLIC_URL.format(nodes='|'.join(public_nodes)))
+
+        else:
+            _LOGGER.debug('no nodes provided')
+            return []
+
+        _LOGGER.debug('fetch url list: %s', urls)
+
+        results = []
+        for url in urls:
+            _LOGGER.debug('fetching url: %s', url)
+
+            async with self._session.get(url) as response:
+                if response.status != 200:
+                    _LOGGER.warning('bad API response for %s: %s', url, response.status)
+
+                json = await response.json()
+                results += json['results']
+
+        return results
+
+
     async def _update(self, now=None):
-        _LOGGER.debug('nodes: %s', self._nodes)
         public_nodes = [node_id for node_id in self._nodes if not self._nodes[node_id]['hidden']]
         private_nodes = [node_id for node_id in self._nodes if self._nodes[node_id]['hidden']]
 
         _LOGGER.debug('public nodes: %s, private nodes: %s', public_nodes, private_nodes)
 
-
-        results = []
-        if public_nodes:
-            url = PUBLIC_URL.format(node_list='|'.join(public_nodes))
-            _LOGGER.debug('calling update url for public nodes: %s', url)
-
-            async with self._session.get(url) as resp:
-                if resp.status != 200:
-                    _LOGGER.warning('bad API response for %s: %s', url, resp.status)
-                    return
-
-                json = await resp.json()
-                results += json['results']
-
-        for node_id in private_nodes:
-            url = PRIVATE_URL.format(node_id=node_id,key=self._nodes[node_id]['key'])
-            _LOGGER.debug('getting private node via url: %s', url)
-
-            async with self._session.get(url) as resp:
-                if resp.status != 200:
-                    _LOGGER.warning('bad API response for %s: %s', url, resp.status)
-                    return
-
-                json = await resp.json()
-                results += json['results']
+        results = await self._fetch_data(public_nodes, private_nodes)
 
         nodes = {}
         for result in results:

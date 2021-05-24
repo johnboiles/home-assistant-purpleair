@@ -35,7 +35,7 @@ async def validate_input(hass: core.HomeAssistant, data):
     config = {
         'title': node['Label'],
         'id': node_id,
-        'hidden': node['Hidden'],
+        'hidden': node['Hidden'] == 'true',
         'key': node['THINGSPEAK_PRIMARY_ID_READ_KEY'],
     }
 
