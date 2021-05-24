@@ -105,20 +105,27 @@ class PurpleAirApi:
                 nodes[node_id] = {
                     'last_seen': result['LastSeen'],
                     'last_update': result['LastUpdateCheck'],
+                    'device_location': result['DEVICE_LOCATIONTYPE'] if 'DEVICE_LOCATIONTYPE'
+                        in result else 'unknown',
                     'readings': {},
                 }
 
             sensor = 'A' if 'ParentID' not in result else 'B'
             readings = nodes[node_id]['readings']
 
-            if sensor not in readings:
-                readings[sensor] = {}
-
+            sensor_data = readings[sensor] if sensor in readings else {}
             for prop in JSON_PROPERTIES:
-                readings[sensor][prop] = result[prop] if prop in result else None
+                sensor_data[prop] = result[prop] if prop in result else None
+
+            if not all(value is None for value in sensor_data.values()):
+                readings[sensor] = sensor_data
+            else:
+                _LOGGER.debug('node %s did not contain any data', node_id)
 
         for node in nodes:
             readings = nodes[node]['readings']
+            _LOGGER.debug('processing node %s, readings: %s', node, readings)
+
             if 'A' in readings and 'B' in readings:
                 for prop in JSON_PROPERTIES:
                     if prop in readings['A'] and prop in readings['B']:
@@ -131,12 +138,15 @@ class PurpleAirApi:
             else:
                 for prop in JSON_PROPERTIES:
                     if prop in readings['A']:
-                        readings[prop] = readings['A'][prop]
+                        a = float(readings['A'][prop])
+                        readings[prop] = round(a, 1)
                         readings[f'{prop}_confidence'] = 'Good'
                     else:
                         readings[prop] = None
 
-            if 'pm2_5_atm' in readings:
+            _LOGGER.debug('node results %s, readings: %s', node, readings)
+
+            if 'pm2_5_atm' in readings and readings['pm2_5_atm']:
                 readings['pm2_5_atm_aqi'] = calc_aqi(readings['pm2_5_atm'], 'pm2_5')
 
         self._data = nodes
