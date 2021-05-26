@@ -1,5 +1,6 @@
 """ The Purple Air air_quality platform. """
 import asyncio
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -8,19 +9,22 @@ from homeassistant.helpers.entity import Entity
 
 from .const import DISPATCHER_PURPLE_AIR, DOMAIN
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(hass, config_entry, async_schedule_add_entities):
-    node_id = config_entry.data["id"]
-    title = config_entry.data["title"]
+    _LOGGER.debug('registring aqi sensor with data: %s', config_entry.data)
 
-    async_schedule_add_entities([PurpleAirQualityIndex(hass, node_id, title)])
+    async_schedule_add_entities([PurpleAirQualityIndex(hass, config_entry)])
 
 
 class PurpleAirQualityIndex(Entity):
-    def __init__(self, hass, node_id, title):
+    def __init__(self, hass, config_entry):
+        data = config_entry.data
+
         self._hass = hass
-        self._node_id = node_id
-        self._title = title
+        self._node_id = data['id']
+        self._title = data['title']
         self._api = hass.data[DOMAIN]
         self._stop_listening = None
 
