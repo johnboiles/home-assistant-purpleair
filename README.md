@@ -37,16 +37,23 @@ This was a very single-day project, so it works for outdoor sensors that
 report an A and B channel. It _should_ work with a single channel sensor
 as well, but I didn't test that.
 
-This uses the free API to access the data. If you have your own sensors
-being published and have them marked as private, you'll need to modify
-this source to allow you to authenticate to view your data with your
-Google account (I think, it was mentioned in their FAQ).
-
-I don't have any local devices, so this will not currently work with
+This should work with both public and private (hidden) cloud devices. I
+don't have any local devices, so this will not currently work with
 sensors on your internal network. It should be simple to add it, but I
 have no way to test it. It sounds like the payload is slightly different
 and the URL is private. This code simply extracts the given sensor ID to
 batch the `/json` requests (the site is hard-coded too, I just use the
 full URL to start).
+
+## Releases
+
+### 1.1.0
+
+* Adds support for private hidden sensors and indoor sensors. Fixes #3
+  and #4.
+
+### 1.0.0
+
+Initial release (after versioning)
 
 [1]: http://www.purpleair.com/map?mylocation
